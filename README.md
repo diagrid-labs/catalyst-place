@@ -1,4 +1,4 @@
-**Place** is a simple catalyst based application that tries to replicate some functionality from the famous r/place event.
+**Place** is a simple catalyst based application that tries to replicate some functionality from the famous [r/place](https://reddit.com/r/place) event.
 Still very rough but a minimally usable version is being hosted [here](https://place.88288338.xyz/).
 
 It is a Go application that:
