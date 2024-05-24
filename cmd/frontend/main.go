@@ -10,8 +10,6 @@ import (
 	"sync"
 
 	dapr "github.com/dapr/go-sdk/client"
-	"github.com/dapr/go-sdk/service/common"
-	daprd "github.com/dapr/go-sdk/service/grpc"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
@@ -63,8 +61,6 @@ func main() {
 	}
 	defer client.Close()
 
-	runDapr("9001")
-
 	r := mux.NewRouter()
 	r.HandleFunc("/", serveIndex)
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -74,48 +70,6 @@ func main() {
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatal(err)
-	}
-}
-
-func runDapr(port string) {
-	// Dapr
-	daprSrv, err := daprd.NewService(":" + port)
-	if err != nil {
-		log.Fatal("failed to start dapr service: %v", err)
-	}
-
-	if err := daprSrv.AddTopicEventHandler(
-		&common.Subscription{
-			PubsubName: cfg.Pubsub.Name,
-			Topic:      cfg.Pubsub.Topic,
-			Route:      "/pubsub/neworder",
-		},
-		func(ctx context.Context, e *common.TopicEvent) (bool, error) {
-			l.Debug("app - Run - event: %+v", *e)
-			var o order.Order
-			if err := json.Unmarshal(e.RawData, &o); err != nil {
-				return false, fmt.Errorf("error unmarshaling order: %w", err)
-			}
-
-			if err := manager.OnNewOrder(ctx, o); err != nil {
-				return false, fmt.Errorf("error handling new order: %w", err)
-			}
-
-			return false, nil
-		}); err != nil {
-		l.Fatal("error adding topic subscription: %v", err)
-	}
-
-	if err := daprSrv.AddHealthCheckHandler("health",
-		func(context.Context) error {
-			l.Debug("app - Run - health check")
-			return nil
-		}); err != nil {
-		l.Fatal("error adding health check handler: %v", err)
-	}
-
-	if err := daprSrv.Start(); err != nil {
-		l.Fatal("server error: %v", err)
 	}
 }
 
