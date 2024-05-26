@@ -1,0 +1,9 @@
+port: 8080
+
+statestore:
+  name: "ext-mongo"
+
+pubsub:
+  name: "ext-pubsub"
+  topic: "newpixel"
+  port: 5000

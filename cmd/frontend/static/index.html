@@ -100,16 +100,22 @@
             canvas.style.display = 'block';
             colorSelector.style.display = 'flex';
 
-            ws = new WebSocket('wss://place.88288338.xyz/ws'); // Replace with your server URL
+            // ws = new WebSocket('wss://place.88288338.xyz/ws'); // Replace with your server URL
+            ws = new WebSocket('ws://localhost:8080/ws'); // for local development
             ws.onopen = function(event) {
                 console.log('WebSocket connection established.');
                 // Send the username to the server
-                ws.send(JSON.stringify({type: "userinfo", data: JSON.stringify({ name: username })}));
+                ws.send(JSON.stringify(
+                    {
+                        type: "userinfo",
+                        data: JSON.stringify({ name: username })
+                    }));
 
                 // Request the current canvas state from the server
-                ws.send(JSON.stringify({type: "canvas"}));
+                ws.send(JSON.stringify({type: "canvas", data: ""}));
             };
 
+            // handle events
             ws.onmessage = function(event) {
                 console.log('got event', event);
                 const op = JSON.parse(event.data);
@@ -117,19 +123,19 @@
                     case "canvas":
                         image.src = op.data;
                         break;
-                    case "place":
+                    case "put":
                         data = JSON.parse(op.data);
-                        drawPixel(data.point.x, data.point.y, data.point.color);
+                        drawPixel(data.x, data.y, data.color);
                         break;
                     case "pixelinfo":
                         data = JSON.parse(op.data);
                         console.log('Pixel info:', data);
                         // Set tooltip content
-                        tooltip.textContent = data.userinfo.name
+                        tooltip.textContent = data.user.name
                         // Show the tooltip and position it relative to the mouse position
                         tooltip.style.display = 'block';
-                        tooltip.style.left = `${data.point.x + 10}px`; // Adjust the offset as needed
-                        tooltip.style.top = `${data.point.y + 10}px`; // Adjust the offset as needed
+                        tooltip.style.left = `${data.pixel.x + 10}px`; // Adjust the offset as needed
+                        tooltip.style.top = `${data.pixel.y + 10}px`; // Adjust the offset as needed
                         break;
                 }
             };
@@ -152,25 +158,17 @@
             x = Math.round(x / gridSize) * gridSize;
             y = Math.round(y / gridSize) * gridSize;
 
-            console.log('Clicked coordinates:', x, y);
+            console.log('clicked coordinates:', x, y);
             
             // Send the clicked coordinates to the server via WebSocket
-            const point = {
-                x: x,
-                y: y,
-                color: selectedColor,
-            };
-
-            req = {
-                type: "place",
+            ws.send(JSON.stringify({
+                type: "put",
                 data: JSON.stringify({
-                    point: point,
-                    userinfo: {
-                        name: username
-                    }
+                    x: x,
+                    y: y,
+                    color: selectedColor,
                 })
-            }
-            ws.send(JSON.stringify(req));
+            }));
         });
 
         // Initialize variables for hover delay
@@ -198,15 +196,13 @@
                     // clear the tooltip
                     tooltip.style.display = 'none';
 
-                    point = {
-                        x: x,
-                        y: y,
-                    };
-                    req = {
+                    ws.send(JSON.stringify({
                         type: "pixelinfo",
-                        data: JSON.stringify(point)
-                    }
-                    ws.send(JSON.stringify(req));
+                        data: JSON.stringify({
+                            x: x,
+                            y: y,
+                        })
+                    }));
                 }
             }, hoverDelay);
         });
