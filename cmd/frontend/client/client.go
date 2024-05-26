@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	daprsdk "github.com/dapr/go-sdk/client"
 	"github.com/gorilla/websocket"
@@ -125,8 +124,24 @@ func (c *client) Handle(ctx context.Context) error {
 			log.Printf("received canvas request")
 
 			// get the canvas
-			if err := c.getCanvas(ctx); err != nil {
+			canvas, err := c.getCanvas(ctx)
+			if err != nil {
 				log.Println("Error getting canvas:", err)
+				break
+			}
+
+			jsonData, err := json.Marshal(canvas)
+			if err != nil {
+				log.Println("Error marshalling canvas:", err)
+				break
+			}
+
+			// send back the reply
+			if err := c.Send(Event{
+				Type: EventTypeCanvas,
+				Data: string(jsonData),
+			}); err != nil {
+				log.Println("error sending canvas:", err)
 				break
 			}
 		}
@@ -194,7 +209,7 @@ func (c *client) broadcast(ctx context.Context, data PixelMetadata) error {
 	return nil
 }
 
-func (c *client) getCanvas(ctx context.Context) error {
+func (c *client) getCanvas(ctx context.Context) ([]pixel.Pixel, error) {
 	// image := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkkAAAACklEQVR4AWNgAAAAAgABc3UBGAAAAABJRU5ErkJggg=="
 	// jsonData, err := json.Marshal(
 	// 	Event{
@@ -209,17 +224,22 @@ func (c *client) getCanvas(ctx context.Context) error {
 	// 	return err
 	// }
 
-	fmt.Printf("querying items\n")
-	query := "{}"
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	items, err := c.dapr.QueryStateAlpha1(ctx, c.cfg.StateStore.Name, query, nil)
-	if err != nil {
-		fmt.Printf("error querying items: %v\n", err)
-		return fmt.Errorf("error getting pixel data: %w", err)
-	}
+	// fmt.Printf("querying items\n")
+	// query := "{}"
+	// ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// defer cancel()
+	// items, err := c.dapr.QueryStateAlpha1(ctx, c.cfg.StateStore.Name, query, nil)
+	// if err != nil {
+	// 	fmt.Printf("error querying items: %v\n", err)
+	// 	return fmt.Errorf("error getting pixel data: %w", err)
+	// }
 
-	fmt.Printf("items: %v", items)
+	// fmt.Printf("items: %v", items)
 
-	return nil
+	p1 := pixel.New()
+	p1.Unmarshal([]byte(`{"x": 230, "y": 200, "color": "blue"}`))
+	p2 := pixel.New()
+	p2.Unmarshal([]byte(`{"x": 440, "y": 200, "color": "blue"}`))
+
+	return []pixel.Pixel{p1, p2}, nil
 }

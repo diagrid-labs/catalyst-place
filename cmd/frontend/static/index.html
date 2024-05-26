@@ -121,7 +121,10 @@
                 const op = JSON.parse(event.data);
                 switch (op.type) {
                     case "canvas":
-                        image.src = op.data;
+                        data = JSON.parse(op.data);
+                        data.forEach(pixel => {
+                            drawPixel(pixel.x, pixel.y, pixel.color);
+                        });
                         break;
                     case "put":
                         data = JSON.parse(op.data);
