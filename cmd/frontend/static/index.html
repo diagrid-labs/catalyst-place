@@ -98,8 +98,8 @@
             canvas.style.display = 'block';
             colorSelector.style.display = 'flex';
 
-            // ws = new WebSocket('wss://place.88288338.xyz/ws'); // Replace with your server URL
-            ws = new WebSocket('ws://localhost:8080/ws'); // for local development
+            ws = new WebSocket('wss://place.88288338.xyz/ws'); // Replace with your server URL
+            //ws = new WebSocket('ws://localhost:8080/ws'); // for local development
             ws.onopen = function(event) {
                 console.log('WebSocket connection established.');
                 // Send the username to the server
