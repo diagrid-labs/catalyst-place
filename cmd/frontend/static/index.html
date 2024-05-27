@@ -83,8 +83,6 @@
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
         const gridSize = 10; // Adjust this value to change grid size
-        // Create a new image element
-        const image = new Image();
         let selectedColor = '';
         let username = '';
         let ws
@@ -143,13 +141,6 @@
                 }
             };
         });
-
-        // Wait for the image to load
-        image.onload = function() {
-            // Draw the image onto the canvas
-            ctx.drawImage(image, 10, 10);
-            console.log('Canvas updated with the current state.');
-        };
 
         // Event listener for mouse clicks on the canvas
         canvas.addEventListener('click', function(event) {

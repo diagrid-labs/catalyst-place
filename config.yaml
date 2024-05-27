@@ -1,5 +1,12 @@
 port: 8080
 
+diagrid:
+  organization_id: "b3c1902d-d7ec-456e-ac81-eda8d98f3fd0"
+  endpoint: "https://api.diagrid.io"
+  project:
+    name: "place"
+    frontend: "frontend"
+
 statestore:
   name: "ext-mongo"
 

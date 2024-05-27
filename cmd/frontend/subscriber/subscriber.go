@@ -3,16 +3,34 @@ package subscriber
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/dapr/go-sdk/service/common"
 	daprcommon "github.com/dapr/go-sdk/service/common"
 	daprd "github.com/dapr/go-sdk/service/grpc"
+	"github.com/diagridio/catalyst-go/pkg/tunnels"
+	"github.com/diagridio/diagrid-cloud-go/cloudruntime"
+	"github.com/spf13/viper"
 
 	"github.com/lrascao/place/cmd/frontend/config"
 	"github.com/lrascao/place/pkg/pixel"
+	"github.com/lrascao/stacktrace"
 )
 
-func Start(cfg *config.Config, fn func(p pixel.Pixel) error) error {
+func Start(ctx context.Context, cfg *config.Config, fn func(p pixel.Pixel) error) error {
+	// create the catalyst client
+	opts := []cloudruntime.CloudruntimeClientOption{
+		cloudruntime.WithAPIKeyToken(viper.GetString("diagrid_api_key")),
+	}
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	catalyst, err := cloudruntime.NewCloudruntimeClient(httpClient, cfg.Diagrid.Endpoint, opts...)
+	if err != nil {
+		return stacktrace.Propagate(err)
+	}
+
 	// Dapr
 	daprSrv, err := daprd.NewService(fmt.Sprintf(":%d", cfg.PubSub.Port))
 	if err != nil {
@@ -46,10 +64,29 @@ func Start(cfg *config.Config, fn func(p pixel.Pixel) error) error {
 		return fmt.Errorf("error adding health check handler: %w", err)
 	}
 
+	// create an app tunnel
+	conn, err := catalyst.ConnectAppTunnel(ctx, cfg.Diagrid.Project.Name, cfg.Diagrid.Project.Frontend, "")
+	if err != nil {
+		return stacktrace.Propagate(err)
+	}
+
+	tunnelReady := make(chan bool)
+	go func() {
+		if err := tunnels.ListenBlocking(ctx, tunnelReady,
+			cfg.Diagrid.OrganizationID,
+			cfg.Diagrid.Project.Name,
+			cfg.Diagrid.Project.Frontend,
+			fmt.Sprintf("%d", cfg.PubSub.Port),
+			conn); err != nil {
+			fmt.Printf("error listening on tunnel: %v", err)
+		}
+	}()
+	// wait for app tunnel to be ready
+	<-tunnelReady
+
 	go func() error {
 		if err := daprSrv.Start(); err != nil {
 			return fmt.Errorf("error starting dapr service: %w", err)
-
 		}
 		return nil
 	}()

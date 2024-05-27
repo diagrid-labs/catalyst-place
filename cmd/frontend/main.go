@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -38,6 +39,9 @@ var (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var configVar string
 	flag.StringVar(&configVar, "config", "config.yaml", "config")
 	flag.Parse()
@@ -46,6 +50,9 @@ func main() {
 	viper.SetConfigName(strings.TrimSuffix(filepath.Base(configVar), filepath.Ext(configVar)))
 	viper.SetConfigType(filepath.Ext(configVar)[1:])
 	viper.AddConfigPath(filepath.Dir(configVar))
+
+	viper.AutomaticEnv()
+	viper.BindEnv("diagrid_api_key")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -108,7 +115,7 @@ func main() {
 		})
 
 	// start the subscriber that will handle external events
-	if err := subscriber.Start(&cfg,
+	if err := subscriber.Start(ctx, &cfg,
 		func(p pixel.Pixel) error {
 			data, err := p.Marshal()
 			if err != nil {
@@ -116,6 +123,8 @@ func main() {
 			}
 
 			// broadcast event to all clients in this replica
+			mu.Lock()
+			defer mu.Unlock()
 			for _, c := range clients {
 				if c.Send(client.Event{
 					Type: client.EventTypePut,

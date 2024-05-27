@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	daprsdk "github.com/dapr/go-sdk/client"
 	"github.com/gorilla/websocket"
@@ -101,7 +102,6 @@ func (c *client) Handle(ctx context.Context) error {
 				break
 			}
 			if err == ErrPixelNotFound {
-				log.Printf("Pixel not found: %s", p)
 				break
 			}
 
@@ -210,36 +210,23 @@ func (c *client) broadcast(ctx context.Context, data PixelMetadata) error {
 }
 
 func (c *client) getCanvas(ctx context.Context) ([]pixel.Pixel, error) {
-	// image := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkkAAAACklEQVR4AWNgAAAAAgABc3UBGAAAAABJRU5ErkJggg=="
-	// jsonData, err := json.Marshal(
-	// 	Event{
-	// 		Type: EventTypeCanvas,
-	// 		Data: image,
-	// 	})
-	// if err != nil {
-	// 	return err
-	// }
+	query := "{}"
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	resp, err := c.dapr.QueryStateAlpha1(ctx, c.cfg.StateStore.Name, query, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error getting pixel data: %w", err)
+	}
 
-	// if err := c.conn.WriteMessage(websocket.TextMessage, jsonData); err != nil {
-	// 	return err
-	// }
+	var pixels []pixel.Pixel
+	for _, item := range resp.Results {
+		var m PixelMetadata
+		if err := json.Unmarshal(item.Value, &m); err != nil {
+			continue
+		}
 
-	// fmt.Printf("querying items\n")
-	// query := "{}"
-	// ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	// defer cancel()
-	// items, err := c.dapr.QueryStateAlpha1(ctx, c.cfg.StateStore.Name, query, nil)
-	// if err != nil {
-	// 	fmt.Printf("error querying items: %v\n", err)
-	// 	return fmt.Errorf("error getting pixel data: %w", err)
-	// }
+		pixels = append(pixels, m.Pixel)
+	}
 
-	// fmt.Printf("items: %v", items)
-
-	p1 := pixel.New()
-	p1.Unmarshal([]byte(`{"x": 230, "y": 200, "color": "blue"}`))
-	p2 := pixel.New()
-	p2.Unmarshal([]byte(`{"x": 440, "y": 200, "color": "blue"}`))
-
-	return []pixel.Pixel{p1, p2}, nil
+	return pixels, nil
 }
