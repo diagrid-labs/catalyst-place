@@ -75,6 +75,11 @@
         <!-- Tooltip -->
         <div class="tooltip" id="tooltip">Tooltip Text</div>
 
+        <!-- Countdown Timer Display -->
+        <div id="countdown-container">
+            <span id="countdown-timer">--:--</span>
+        </div>
+
         <!-- Canvas -->
         <canvas id="drawingCanvas" width="800" height="600"></canvas>
     </div>
@@ -86,21 +91,21 @@
         let selectedColor = '';
         let username = '';
         let ws
+        let timerId
+        
+        function connect() {
+            protocol = 'ws'
+            if (window.location.protocol.includes('https')) {
+                protocol = 'wss';
+            }
 
-        usernameForm.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent form submission
+            console.log('connecting to websocket at', window.location.host, protocol);
+            ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
 
-            username = document.getElementById('username').value;
-            console.log('Username:', username);
-
-            // Hide the username form and display the canvas
-            usernameForm.style.display = 'none';
-            canvas.style.display = 'block';
-            colorSelector.style.display = 'flex';
-
-            ws = new WebSocket('wss://place.88288338.xyz/ws'); // Replace with your server URL
-            //ws = new WebSocket('ws://localhost:8080/ws'); // for local development
             ws.onopen = function(event) {
+                console.log('successfully connected');
+                clearInterval(timerId);
+
                 console.log('WebSocket connection established.');
                 // Send the username to the server
                 ws.send(JSON.stringify(
@@ -110,7 +115,10 @@
                     }));
 
                 // Request the current canvas state from the server
-                ws.send(JSON.stringify({type: "canvas", data: ""}));
+                ws.send(JSON.stringify({type: "canvas"}));
+
+                // Get the current user's cooldown
+                ws.send(JSON.stringify({type: "cooldown"}));
             };
 
             // handle events
@@ -130,7 +138,7 @@
                         break;
                     case "pixelinfo":
                         data = JSON.parse(op.data);
-                        console.log('Pixel info:', data);
+                        //console.log('pixel info:', data);
                         // Set tooltip content
                         tooltip.textContent = data.user.name
                         // Show the tooltip and position it relative to the mouse position
@@ -138,12 +146,58 @@
                         tooltip.style.left = `${data.pixel.x + 10}px`; // Adjust the offset as needed
                         tooltip.style.top = `${data.pixel.y + 10}px`; // Adjust the offset as needed
                         break;
+                    case 'cooldown':
+                        cooldown = JSON.parse(op.data);
+                        console.log('cooldown:', cooldown);
+                        if (cooldown == 0) {
+                            console.log('no cooldown');
+                            document.getElementById('countdown-timer').textContent = "00:00";
+                            break
+                        }
+
+                        // Start the countdown with the received cooldown value
+                        startCountdown(cooldown);
                 }
             };
+
+            ws.onclose = function(e) {
+              console.log('Socket is closed. Reconnect will be attempted in 5 seconds, reason:', e.reason);
+              ws.close()
+
+              timerId = setInterval(() => {
+                console.log('reconnecting...');
+                connect();
+              }, 5000);
+            };
+
+            ws.onerror = function(err) {
+                console.error('Socket encountered error: ', err.message, 'Closing socket');
+                ws.close();
+            };
+        }
+
+        usernameForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form submission
+
+            username = document.getElementById('username').value;
+            console.log('Username:', username);
+
+            // Hide the username form and display the canvas
+            usernameForm.style.display = 'none';
+            canvas.style.display = 'block';
+            colorSelector.style.display = 'flex';
+
+            connect();
         });
 
         // Event listener for mouse clicks on the canvas
         canvas.addEventListener('click', function(event) {
+            // are we in cooldown?
+            if (document.getElementById('countdown-timer').textContent != '00:00') {
+                console.log('cooldown active');
+                return;
+            }
+
             const rect = canvas.getBoundingClientRect();
             let x = event.clientX - rect.left;
             let y = event.clientY - rect.top;
@@ -154,6 +208,10 @@
 
             console.log('clicked coordinates:', x, y);
             
+            // immediately draw the pixel, when the generated event comes back
+            // it will just confirm the pixel is drawn
+            drawPixel(x, y, selectedColor);
+
             // Send the clicked coordinates to the server via WebSocket
             ws.send(JSON.stringify({
                 type: "put",
@@ -163,11 +221,14 @@
                     color: selectedColor,
                 })
             }));
+
+            // Get the current user's cooldown
+            ws.send(JSON.stringify({type: "cooldown"}));
         });
 
         // Initialize variables for hover delay
         let hoverTimeout = null;
-        const hoverDelay = 500; // Milliseconds
+        const hoverDelay = 1000; // Milliseconds
 
         canvas.addEventListener('mousemove', function(event) {
             // Calculate the mouse position relative to the canvas
@@ -184,7 +245,7 @@
 
             // Start a new hover timeout
             hoverTimeout = setTimeout(() => {
-                console.log('Mouse position (x, y):', x, y);
+                console.log('mouse position (x, y):', x, y);
 
                 if (ws) {
                     // clear the tooltip
@@ -228,6 +289,39 @@
             const pixelSize = 10; // Adjust this value to increase/decrease the size of the pixels
             ctx.fillStyle = color;
             ctx.fillRect(x - pixelSize / 2, y - pixelSize / 2, pixelSize, pixelSize);
+        }
+
+        let countdownInterval;
+        function startCountdown(cooldownSeconds) {
+            // Clear any existing countdown intervals
+            clearInterval(countdownInterval);
+
+            // Update the countdown display initially
+            updateCountdownDisplay(cooldownSeconds);
+
+            // Start a new interval to count down every second
+            countdownInterval = setInterval(function() {
+                cooldownSeconds--;
+                updateCountdownDisplay(cooldownSeconds);
+
+                // If the countdown reaches 0, stop the timer
+                if (cooldownSeconds <= 0) {
+                    clearInterval(countdownInterval);
+                    document.getElementById('countdown-timer').textContent = "00:00";
+                }
+            }, 1000);
+        }
+
+        function updateCountdownDisplay(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+
+            // Format the time as mm:ss
+            const formattedTime =
+                (minutes < 10 ? '0' : '') + minutes + ':' +
+                (remainingSeconds < 10 ? '0' : '') + remainingSeconds;
+
+            document.getElementById('countdown-timer').textContent = formattedTime;
         }
     </script>
 </body>

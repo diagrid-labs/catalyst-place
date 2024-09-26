@@ -15,6 +15,7 @@ const (
 	RequestTypePut       RequestType = "put"
 	RequestTypePixelInfo RequestType = "pixelinfo"
 	RequestTypeCanvas    RequestType = "canvas"
+	RequestTypeCooldown  RequestType = "cooldown"
 )
 
 type EventType string
@@ -23,6 +24,7 @@ const (
 	EventTypePut       EventType = "put"
 	EventTypePixelInfo EventType = "pixelinfo"
 	EventTypeCanvas    EventType = "canvas"
+	EventTypeCooldown  EventType = "cooldown"
 )
 
 type Request struct {

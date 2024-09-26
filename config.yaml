@@ -11,6 +11,9 @@ statestore:
   name: "ext-mongo"
 
 pubsub:
-  name: "ext-pubsub"
+  name: "pubsub"
   topic: "newpixel"
-  port: 5000
+
+cooldown:
+  name: "cooldown"
+  ttl: 60s

@@ -7,7 +7,6 @@ type StateStoreConfig struct {
 type PubSubConfig struct {
 	Name  string `mapstructure:"name"`
 	Topic string `mapstructure:"topic"`
-	Port  int    `mapstructure:"port"`
 }
 
 type DiagridConfig struct {
@@ -21,9 +20,15 @@ type ProjectConfig struct {
 	Frontend string `mapstructure:"frontend"`
 }
 
+type CooldownConfig struct {
+	Name string `mapstructure:"name"`
+	TTL  string `mapstructure:"ttl"`
+}
+
 type Config struct {
 	Port       int              `mapstructure:"port"`
 	Diagrid    DiagridConfig    `mapstructure:"diagrid"`
 	StateStore StateStoreConfig `mapstructure:"statestore"`
 	PubSub     PubSubConfig     `mapstructure:"pubsub"`
+	Cooldown   CooldownConfig   `mapstructure:"cooldown"`
 }

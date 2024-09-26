@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	daprsdk "github.com/dapr/go-sdk/client"
@@ -61,7 +62,6 @@ func (c *client) Handle(ctx context.Context) error {
 		if err := c.conn.ReadJSON(&req); err != nil {
 			return fmt.Errorf("error reading request: %w", err)
 		}
-		log.Printf("received request from client: %+v", req)
 
 		switch req.Type {
 		case RequestTypePut:
@@ -76,7 +76,7 @@ func (c *client) Handle(ctx context.Context) error {
 				Pixel: p,
 				User:  u,
 			}
-			if err := c.savePixel(ctx, data); err != nil {
+			if err := c.savePixel(ctx, u.Name, data); err != nil {
 				log.Println("error saving pixel:", err)
 				break
 			}
@@ -144,6 +144,34 @@ func (c *client) Handle(ctx context.Context) error {
 				log.Println("error sending canvas:", err)
 				break
 			}
+
+		case RequestTypeCooldown:
+			log.Printf("received cooldown request")
+
+			// fetch the cooldown value
+			cooldown, err := c.getCooldown(ctx, u.Name)
+			if err != nil {
+				log.Println("Error getting cooldown:", err)
+				break
+			}
+
+			jsonData, err := json.Marshal(cooldown)
+			if err != nil {
+				log.Println("Error marshalling cooldown:", err)
+				break
+			}
+
+			// send back the reply
+			if err := c.Send(Event{
+				Type: EventTypeCooldown,
+				Data: string(jsonData),
+			}); err != nil {
+				log.Println("error sending cooldown:", err)
+				break
+			}
+
+		default:
+			log.Printf("unknown client request: %+v", req)
 		}
 	}
 }
@@ -161,10 +189,30 @@ func (c *client) Send(data any) error {
 	return nil
 }
 
-func (c *client) savePixel(ctx context.Context, data PixelMetadata) error {
+func (c *client) savePixel(ctx context.Context, username string, data PixelMetadata) error {
+	// are we in cooldown?
+	cooldown, err := c.getCooldown(ctx, username)
+	if err != nil {
+		return fmt.Errorf("error getting user's cooldown: %w", err)
+	}
+	if cooldown > 0 {
+		return fmt.Errorf("user is in cooldown: %d", cooldown)
+	}
+
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("error marshalling pixel data: %w", err)
+	}
+
+	cooldownKey := cooldownUserKey(username)
+	cooldownJsonData, err := json.Marshal(c.cfg.Cooldown.TTL)
+	if err != nil {
+		return fmt.Errorf("error marshalling cooldown data: %w", err)
+	}
+
+	metadata := map[string]string{"ttlInSeconds": c.cfg.Cooldown.TTL}
+	if err := c.dapr.SaveState(ctx, c.cfg.Cooldown.Name, cooldownKey, cooldownJsonData, metadata); err != nil {
+		return fmt.Errorf("error saving pixel data: %w", err)
 	}
 
 	key := fmt.Sprintf("c%d_%d", data.GetX(), data.GetY())
@@ -210,9 +258,10 @@ func (c *client) broadcast(ctx context.Context, data PixelMetadata) error {
 }
 
 func (c *client) getCanvas(ctx context.Context) ([]pixel.Pixel, error) {
-	query := "{}"
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	query := "{}"
 	resp, err := c.dapr.QueryStateAlpha1(ctx, c.cfg.StateStore.Name, query, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error getting pixel data: %w", err)
@@ -229,4 +278,35 @@ func (c *client) getCanvas(ctx context.Context) ([]pixel.Pixel, error) {
 	}
 
 	return pixels, nil
+}
+
+func (c *client) getCooldown(ctx context.Context, username string) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	key := cooldownUserKey(username)
+	resp, err := c.dapr.GetState(ctx, c.cfg.Cooldown.Name, key, nil)
+	if err != nil {
+		return 0, fmt.Errorf("error getting user's cooldown: %w", err)
+	}
+	if resp.Value == nil {
+		return 0, nil
+	}
+
+	var strCooldown string
+	if err := json.Unmarshal(resp.Value, &strCooldown); err != nil {
+		return 0, fmt.Errorf("error unmarshalling user's cooldown: %w", err)
+	}
+
+	cooldown, err := strconv.Atoi(strCooldown)
+	if err != nil {
+		return 0, fmt.Errorf("error converting user's cooldown to integer (%s): %w",
+			strCooldown, err)
+	}
+
+	return cooldown, nil
+}
+
+func cooldownUserKey(name string) string {
+	return fmt.Sprintf("cooldown_%s", name)
 }

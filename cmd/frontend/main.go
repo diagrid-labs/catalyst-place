@@ -45,6 +45,7 @@ func main() {
 	var configVar string
 	flag.StringVar(&configVar, "config", "config.yaml", "config")
 	flag.Parse()
+	log.Printf("config file: %s\n", configVar)
 
 	// set the config without the extension
 	viper.SetConfigName(strings.TrimSuffix(filepath.Base(configVar), filepath.Ext(configVar)))
@@ -57,8 +58,10 @@ func main() {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config file not found; ignore error if desired
+			log.Fatalf("config file not found: %s\n", configVar)
 		} else {
 			// Config file was found but another error was produced
+			log.Fatalf("error reading config file: %v", err)
 		}
 	}
 
@@ -66,6 +69,8 @@ func main() {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf("error unmarshaling configuration: %v", err)
 	}
+
+	log.Printf("%+v\n", cfg)
 
 	// create a connection to the Dapr runtime, it will be the same for all the requests
 	dapr, err := daprsdk.NewClient()
@@ -75,7 +80,6 @@ func main() {
 	defer dapr.Close()
 
 	r := mux.NewRouter()
-
 	// serve the index.html file that contains the whole FE
 	r.HandleFunc("/",
 		func(w http.ResponseWriter, r *http.Request) {
@@ -105,26 +109,32 @@ func main() {
 			}
 			defer conn.Close()
 
-			// handle the client
+			// add this new client to our local list
 			c := client.New(conn, dapr, cfg)
 			mu.Lock()
 			clients = append(clients, c)
 			mu.Unlock()
+			log.Printf("client connected from %s (total: %d)",
+				conn.RemoteAddr(), len(clients))
 
+			// handle all requests coming in from this client
 			c.Handle(r.Context())
 		})
 
 	// start the subscriber that will handle external events
-	if err := subscriber.Start(ctx, &cfg,
+	if err := subscriber.Start(ctx, dapr, &cfg,
 		func(p pixel.Pixel) error {
 			data, err := p.Marshal()
 			if err != nil {
 				return fmt.Errorf("error marshaling pixel: %w", err)
 			}
 
-			// broadcast event to all clients in this replica
+			// broadcast event to all websocket clients in this replica
 			mu.Lock()
 			defer mu.Unlock()
+			log.Printf("broadcasting pixel %s to %d clients",
+				p, len(clients))
+
 			for _, c := range clients {
 				if c.Send(client.Event{
 					Type: client.EventTypePut,
@@ -139,7 +149,7 @@ func main() {
 		log.Fatalf("error starting grpc server: %v", err)
 	}
 
-	log.Printf("Starting server at :%d\n", cfg.Port)
+	log.Printf("Starting server at http://localhost:%d\n", cfg.Port)
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r); err != nil {
 		log.Fatal(err)
