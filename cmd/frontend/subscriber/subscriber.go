@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 
 	daprsdk "github.com/dapr/go-sdk/client"
 	"golang.org/x/sync/errgroup"
@@ -29,32 +30,35 @@ func Start(ctx context.Context, client daprsdk.Client, cfg *config.Config, fn fu
 		defer subscription.Close()
 
 		for {
-			if ctx.Err() != nil {
+			select {
+			case <-ctx.Done():
+				log.Println("Shutting down subscriber gracefully...")
 				return nil
-			}
+			default:
 
-			msg, err := subscription.Receive()
-			if err != nil {
-				fmt.Printf("error receiving message: %v", err)
-			}
-			if msg == nil {
-				continue
-			}
+				msg, err := subscription.Receive()
+				if err != nil {
+					fmt.Printf("error receiving message: %v", err)
+				}
+				if msg == nil {
+					continue
+				}
 
-			// Process the event
-			p := pixel.New()
-			if err := p.Unmarshal(msg.RawData); err != nil {
-				return fmt.Errorf("error unmarshaling pixel: %w", err)
-			}
-			log.Printf("received pixel event: %+v", p)
+				// Process the event
+				p := pixel.New()
+				if err := p.Unmarshal(msg.RawData); err != nil {
+					return fmt.Errorf("error unmarshaling pixel: %w", err)
+				}
+				slog.Info("received pixel event", "pixel", p)
 
-			if err := fn(p); err != nil {
-				return fmt.Errorf("error handling pixel: %w", err)
-			}
+				if err := fn(p); err != nil {
+					return fmt.Errorf("error handling pixel: %w", err)
+				}
 
-			// Acknowledge the message
-			if err := msg.Success(); err != nil {
-				fmt.Printf("error acknowledging message: %v", err)
+				// Acknowledge the message
+				if err := msg.Success(); err != nil {
+					fmt.Printf("error acknowledging message: %v", err)
+				}
 			}
 		}
 	})

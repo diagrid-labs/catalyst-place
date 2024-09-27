@@ -16,4 +16,4 @@ pubsub:
 
 cooldown:
   name: "cooldown"
-  ttl: 60s
+  ttl: 60

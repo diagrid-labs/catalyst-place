@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -54,51 +54,68 @@ func (c *client) Handle(ctx context.Context) error {
 	if err := u.Unmarshal([]byte(req.Data)); err != nil {
 		return fmt.Errorf("error unmarshalling user: %w", err)
 	}
-	log.Printf("received user info: %s", u)
+	slog.Debug("received user info: ", u)
+
+	// Goroutine to handle context cancellation and close the WebSocket
+	go func() {
+		<-ctx.Done()
+		slog.Info("Closing WebSocket connection for client", "remoteaddr", c.conn.RemoteAddr())
+		if err := c.conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Server shutting down")); err != nil {
+			slog.Error("Error sending close message: %v", err)
+		}
+		c.conn.Close()
+	}()
 
 	// go into a loop of handling client messages
 	for {
-		// Read the message from the client
-		if err := c.conn.ReadJSON(&req); err != nil {
-			return fmt.Errorf("error reading request: %w", err)
+		// Listen for incoming messages or context cancellation
+		select {
+		case <-ctx.Done():
+			return nil // Exit when the context is canceled
+		default:
+			// Read the message from the client
+			if err := c.conn.ReadJSON(&req); err != nil {
+				return fmt.Errorf("error reading request: %w", err)
+			}
 		}
 
 		switch req.Type {
 		case RequestTypePut:
 			p := pixel.New()
 			if err := p.Unmarshal([]byte(req.Data)); err != nil {
-				log.Println("error unmarshalling pixel:", err)
+				slog.Error("error unmarshalling pixel: ", err)
 				break
 			}
-			log.Printf("received put pixel request: %s", p)
+			slog.Info("received put pixel request", "pixel", p)
 
 			data := PixelMetadata{
 				Pixel: p,
 				User:  u,
 			}
 			if err := c.savePixel(ctx, u.Name, data); err != nil {
-				log.Println("error saving pixel:", err)
+				slog.Error("error saving pixel: ", err)
 				break
 			}
 
 			// broadcast event to all clients
 			if err := c.broadcast(ctx, data); err != nil {
-				log.Println("error broadcasting pixel:", err)
+				slog.Error("error broadcasting pixel: ", err)
 				break
 			}
 
 		case RequestTypePixelInfo:
 			p := pixel.New()
 			if err := p.Unmarshal([]byte(req.Data)); err != nil {
-				log.Println("error unmarshalling pixel:", err)
+				slog.Error("error unmarshalling pixel: ", err)
 				break
 			}
-			log.Printf("received pixel info request: %s", p)
+			slog.Info("received pixel info request", "pixel", p)
 
 			// fetch the pixel data, encode it into json and send it back
 			data, err := c.getPixel(ctx, p)
 			if err != nil && err != ErrPixelNotFound {
-				log.Println("Error getting pixel info:", err)
+				slog.Error("Error getting pixel info: ", err)
 				break
 			}
 			if err == ErrPixelNotFound {
@@ -107,7 +124,7 @@ func (c *client) Handle(ctx context.Context) error {
 
 			jsonData, err := json.Marshal(data)
 			if err != nil {
-				log.Println("Error marshalling pixel info:", err)
+				slog.Error("Error marshalling pixel info: ", err)
 				break
 			}
 
@@ -116,23 +133,23 @@ func (c *client) Handle(ctx context.Context) error {
 				Type: EventTypePixelInfo,
 				Data: string(jsonData),
 			}); err != nil {
-				log.Println("error sending pixel info:", err)
+				slog.Error("error sending pixel info: ", err)
 				break
 			}
 
 		case RequestTypeCanvas:
-			log.Printf("received canvas request")
+			slog.Info("received canvas request")
 
 			// get the canvas
 			canvas, err := c.getCanvas(ctx)
 			if err != nil {
-				log.Println("Error getting canvas:", err)
+				slog.Error("Error getting canvas: ", err)
 				break
 			}
 
 			jsonData, err := json.Marshal(canvas)
 			if err != nil {
-				log.Println("Error marshalling canvas:", err)
+				slog.Error("Error marshalling canvas: ", err)
 				break
 			}
 
@@ -141,23 +158,23 @@ func (c *client) Handle(ctx context.Context) error {
 				Type: EventTypeCanvas,
 				Data: string(jsonData),
 			}); err != nil {
-				log.Println("error sending canvas:", err)
+				slog.Error("error sending canvas: ", err)
 				break
 			}
 
 		case RequestTypeCooldown:
-			log.Printf("received cooldown request")
+			slog.Info("received cooldown request")
 
 			// fetch the cooldown value
 			cooldown, err := c.getCooldown(ctx, u.Name)
 			if err != nil {
-				log.Println("Error getting cooldown:", err)
+				slog.Error("Error getting cooldown: ", err)
 				break
 			}
 
 			jsonData, err := json.Marshal(cooldown)
 			if err != nil {
-				log.Println("Error marshalling cooldown:", err)
+				slog.Error("Error marshalling cooldown: ", err)
 				break
 			}
 
@@ -166,12 +183,12 @@ func (c *client) Handle(ctx context.Context) error {
 				Type: EventTypeCooldown,
 				Data: string(jsonData),
 			}); err != nil {
-				log.Println("error sending cooldown:", err)
+				slog.Error("error sending cooldown: ", err)
 				break
 			}
 
 		default:
-			log.Printf("unknown client request: %+v", req)
+			slog.Warn("unknown client request: ", req)
 		}
 	}
 }
