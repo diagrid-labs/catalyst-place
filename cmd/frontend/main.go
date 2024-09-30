@@ -61,7 +61,7 @@ func main() {
 	var configVar string
 	flag.StringVar(&configVar, "config", "config.yaml", "config")
 	flag.Parse()
-	slog.Debug("config file: %s\n", configVar)
+	slog.Debug("config file", configVar)
 
 	// set the config without the extension
 	viper.SetConfigName(strings.TrimSuffix(filepath.Base(configVar), filepath.Ext(configVar)))
@@ -89,7 +89,7 @@ func main() {
 		return
 	}
 
-	slog.Info("config: ", cfg)
+	slog.Info("starting frontend", "config", cfg)
 
 	// create a connection to the Dapr runtime, it will be the same for all the requests
 	dapr, err := daprsdk.NewClient()
