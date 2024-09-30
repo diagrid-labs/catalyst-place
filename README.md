@@ -11,7 +11,7 @@ It is a Go application that:
 
 * Sign up for a free [Catalyst](https://catalyst.diagrid.io) account.
 
-* Authenticate using the [Diagrid CLI](https://github.com/diagridio/cli)
+* Authenticate using the [Diagrid CLI](https://docs.diagrid.io/catalyst/references/cli-reference/intro)
 ```bash
 diagrid login 
 ```
