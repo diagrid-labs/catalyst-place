@@ -8,5 +8,5 @@ pubsub:
   topic: "newpixel"
 
 cooldown:
-  name: "cooldown"
+  name: "kvstore"
   ttl: 60
