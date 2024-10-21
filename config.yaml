@@ -1,7 +1,7 @@
 port: 8080
 
 statestore:
-  name: "ext-mongo"
+  name: "canvas"
 
 pubsub:
   name: "pubsub"

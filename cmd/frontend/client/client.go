@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -286,8 +287,23 @@ func (c *client) getCanvas(ctx context.Context) ([]pixel.Pixel, error) {
 
 	var pixels []pixel.Pixel
 	for _, item := range resp.Results {
+		// ----------- SNIP --------------------
+		// postgresql v1 QueryStateAlpha1 op returns base64 encoded values
+		// drop this when it gets fixed
+		vs, err := strconv.Unquote(string(item.Value))
+		if err != nil {
+			slog.Error("error unquoting value", "err", err)
+			continue
+		}
+		v, err := base64.StdEncoding.DecodeString(vs)
+		if err != nil {
+			slog.Error("error decoding base64 value", "err", err)
+			continue
+		}
+		// -------------------------------------
 		var m PixelMetadata
-		if err := json.Unmarshal(item.Value, &m); err != nil {
+		if err := json.Unmarshal(v, &m); err != nil {
+			slog.Error("error unmarshalling pixel data [%v]: %v", string(v), err)
 			continue
 		}
 

@@ -37,6 +37,15 @@ diagrid project list
 diagrid appid list
 ```
 
+## Creating the `canvas` component
+
+* Log into a free managed postgresql provider like Neon or ElephantSQL and create a database.
+  Obtain the connection string and use it to create a component.
+
+```bash
+diagrid component create canvas --type state.postgresql --metadata '<connection string>'
+```
+
 ## Running the application
 
 * Build It
