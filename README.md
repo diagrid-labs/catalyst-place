@@ -1,4 +1,6 @@
-**Place** is a simple catalyst based application that tries to replicate some functionality from the famous [r/place](https://reddit.com/r/place) event.
+# Place
+
+**Place** is a basic application powered by Diagrid Catalyst that tries to replicate some functionality from the famous [r/place](https://reddit.com/r/place) event.
 Still very rough but a minimally usable version is being hosted [here](https://place.88288338.xyz/).
 
 It is a Go application that:
@@ -39,11 +41,11 @@ diagrid appid list
 
 ## Creating the `canvas` component
 
-* Log into a free managed postgresql provider like Neon or ElephantSQL and create a database.
+* Log into a free managed PostgreSQL provider like [Neon](https://neon.tech/) or [ElephantSQL](https://www.elephantsql.com/) and create a database.
   Obtain the connection string and use it to create a component.
 
 ```bash
-diagrid component create canvas --type state.postgresql --metadata '<connection string>'
+diagrid component create canvas --type state.postgresql --metadata connectionString=<connection string>
 ```
 
 ## Running the application
@@ -77,3 +79,10 @@ diagrid dev start
 
 * Open the browser and navigate to `http://localhost:8080`
 
+* Enter your name and start drawing on the canvas pixel by pixel.
+
+![Place web frontend](place.png)
+
+## More information
+
+Want to know more about the capabilities that Catalyst offers? Read it on our [Diagrid](https://diagrid.io/catalyst) website.
