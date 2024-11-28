@@ -1,6 +1,8 @@
 # Place
 
-**Place** is a basic application powered by Diagrid Catalyst that tries to replicate some functionality from the famous [r/place](https://reddit.com/r/place) event.
+![Place web frontend](place.png)
+
+**Place** is a basic drawing application powered by Diagrid Catalyst that tries to replicate some functionality from the famous [r/place](https://reddit.com/r/place) event.
 Still very rough but a minimally usable version is being hosted [here](https://place.88288338.xyz/).
 
 It is a Go application that:
@@ -82,6 +84,12 @@ diagrid dev start
 * Enter your name and start drawing on the canvas pixel by pixel.
 
 ![Place web frontend](place.png)
+
+* Use the Catalyst web dashboard to monitor the application.
+
+![Catalyst Call Graph](catalyst-app-graph.png)
+
+![Catalyst API Logs](catalyst-requests.png)
 
 ## More information
 
